@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Simple Chat with Save</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 500px; margin: 20px auto; }
+    #chat { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; }
+    #chat div { margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+
+<h2>Simple Chat (Saved Locally)</h2>
+
+<label>Username: <input type="text" id="username" placeholder="Enter username" /></label><br><br>
+<label>Message: <input type="text" id="message" placeholder="Enter message" /></label>
+<button onclick="sendMessage()">Send</button>
+
+<div id="chat"></div>
+
+<script>
+  const chatDiv = document.getElementById('chat');
+
+  // Load saved messages from localStorage on page load
+  window.onload = function() {
+    const savedMessages = JSON.parse(localStorage.getItem('chatMessages')) || [];
+    savedMessages.forEach(({user, msg}) => {
+      addMessageToChat(user, msg);
+    });
+  }
+
+  function addMessageToChat(user, msg) {
+    const newMsg = document.createElement('div');
+    newMsg.textContent = user + ': ' + msg;
+    chatDiv.appendChild(newMsg);
+    chatDiv.scrollTop = chatDiv.scrollHeight;
+  }
+
+  function sendMessage() {
+    const user = document.getElementById('username').value.trim();
+    const msg = document.getElementById('message').value.trim();
+    if (!user) {
+      alert('Please enter a username');
+      return;
+    }
+    if (!msg) {
+      alert('Please enter a message');
+      return;
+    }
+
+    addMessageToChat(user, msg);
+
+    // Save message to localStorage
+    const savedMessages = JSON.parse(localStorage.getItem('chatMessages')) || [];
+    savedMessages.push({user, msg});
+    localStorage.setItem('chatMessages', JSON.stringify(savedMessages));
+
+    document.getElementById('message').value = '';
+  }
+
+  // Optional: Send message on Enter key in message box
+  document.getElementById('message').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') sendMessage();
+  });
+</script>
+
+</body>
+</html>
