@@ -6,8 +6,8 @@
   <title>MaskedMessages</title>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getDatabase, ref, push, onChildAdded, set, serverTimestamp, onDisconnect, remove } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getDatabase, ref, push, onChildAdded, set, serverTimestamp, onDisconnect, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyC16cfWYgHMhRkBe8BaV_fMeXuAC2wXX9U",
@@ -22,7 +22,6 @@
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth();
-    const provider = new GoogleAuthProvider();
     const db = getDatabase(app);
 
     const loginScreen = document.getElementById("loginScreen");
@@ -33,6 +32,9 @@
     const userList = document.createElement("div");
     userList.id = "userList";
     document.body.prepend(userList);
+
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
 
     let currentUser = null;
 
@@ -58,7 +60,7 @@
       const text = messageInput.value.trim();
       if (text && currentUser) {
         push(ref(db, "messages"), {
-          username: currentUser.displayName,
+          username: currentUser.displayName || currentUser.email,
           text,
           timestamp: serverTimestamp()
         });
@@ -74,7 +76,7 @@
 
     function handleUserPresence(user) {
       const userRef = ref(db, `onlineUsers/${user.uid}`);
-      set(userRef, { username: user.displayName });
+      set(userRef, { username: user.displayName || user.email });
       onDisconnect(userRef).remove();
     }
 
@@ -83,14 +85,25 @@
         currentUser = user;
         loginScreen.style.display = "none";
         chatApp.style.display = "flex";
-        usernameDisplay.innerText = `Logged in as: ${user.displayName}`;
+        usernameDisplay.innerText = `Logged in as: ${user.displayName || user.email}`;
         handleUserPresence(user);
       }
     });
 
-    onChildAdded(usersRef, (snap) => updateUserList(snap.ref.parent._data));
+    onValue(usersRef, (snap) => updateUserList(snap.val() || {}));
 
-    document.getElementById("loginBtn").onclick = () => signInWithPopup(auth, provider);
+    document.getElementById("loginBtn").onclick = () => {
+      const email = emailInput.value;
+      const password = passwordInput.value;
+      signInWithEmailAndPassword(auth, email, password).catch(err => alert("Login failed: " + err.message));
+    };
+
+    document.getElementById("signupBtn").onclick = () => {
+      const email = emailInput.value;
+      const password = passwordInput.value;
+      createUserWithEmailAndPassword(auth, email, password).catch(err => alert("Signup failed: " + err.message));
+    };
+
     document.getElementById("logoutBtn").onclick = () => signOut(auth);
   </script>
   <style>
@@ -145,6 +158,15 @@
       color: white;
       cursor: pointer;
     }
+    #logoutBtn {
+      padding: 10px;
+      margin-left: 10px;
+      background-color: #ff5c5c;
+      border: none;
+      border-radius: 5px;
+      color: white;
+      cursor: pointer;
+    }
     #usernameDisplay {
       padding: 10px;
       background-color: #1e1f22;
@@ -156,12 +178,21 @@
       padding: 10px;
       border-right: 1px solid #444;
     }
+    input[type="email"], input[type="password"] {
+      padding: 10px;
+      margin: 5px;
+      border-radius: 5px;
+      border: none;
+    }
   </style>
 </head>
 <body>
   <div id="loginScreen">
     <h2>Welcome to MaskedMessages</h2>
-    <button id="loginBtn">Login with Google</button>
+    <input type="email" id="email" placeholder="Email">
+    <input type="password" id="password" placeholder="Password">
+    <button id="loginBtn">Login</button>
+    <button id="signupBtn">Sign Up</button>
   </div>
 
   <div id="chatApp">
