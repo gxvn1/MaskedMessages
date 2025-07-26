@@ -1,749 +1,177 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>MaskedMessages - Discord Style Login & Online Users</title>
-<style>
-  /* Reset */
-  * {
-    box-sizing: border-box;
-  }
-  body, html {
-    margin: 0; padding: 0;
-    height: 100%;
-    font-family: 'Whitney', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #36393f;
-    color: #dcddde;
-  }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MaskedMessages</title>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getDatabase, ref, push, onChildAdded, set, serverTimestamp, onDisconnect, remove } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-  /* Container - flex row */
-  #container {
-    display: flex;
-    height: 100vh;
-  }
+    const firebaseConfig = {
+      apiKey: "AIzaSyC16cfWYgHMhRkBe8BaV_fMeXuAC2wXX9U",
+      authDomain: "maskedmessages-2cd92.firebaseapp.com",
+      projectId: "maskedmessages-2cd92",
+      storageBucket: "maskedmessages-2cd92.appspot.com",
+      messagingSenderId: "890759287055",
+      appId: "1:890759287055:web:69a23bbc8dd11b16b5ee7a",
+      measurementId: "G-S5477KD1BC",
+      databaseURL: "https://maskedmessages-2cd92-default-rtdb.firebaseio.com"
+    };
 
-  /* User list on left */
-  #userListPanel {
-    width: 220px;
-    background-color: #2f3136;
-    border-right: 1px solid #202225;
-    padding: 15px;
-    display: none; /* show only after login */
-    flex-direction: column;
-  }
-  #userListPanel h3 {
-    margin-top: 0;
-    color: #b9bbbe;
-    font-weight: 700;
-    font-size: 16px;
-    user-select: none;
-  }
-  #userList {
-    flex: 1;
-    overflow-y: auto;
-    margin-top: 10px;
-  }
-  .userItem {
-    padding: 8px 12px;
-    border-radius: 6px;
-    margin-bottom: 5px;
-    background-color: #36393f;
-    cursor: default;
-    color: #dcddde;
-    user-select: none;
-  }
-  .userItem.self {
-    background-color: #5865f2;
-    font-weight: 700;
-  }
-  .userItem.admin {
-    color: #faa61a;
-    font-weight: 700;
-  }
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth();
+    const provider = new GoogleAuthProvider();
+    const db = getDatabase(app);
 
-  /* Chat UI */
-  #chatUI {
-    flex: 1;
-    display: none;
-    flex-direction: column;
-    height: 100vh;
-    background-color: #2f3136;
-  }
-
-  #header {
-    background-color: #202225;
-    padding: 15px 20px;
-    color: white;
-    font-weight: 700;
-    font-size: 18px;
-    border-bottom: 1px solid #292b2f;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  #usernameDisplay {
-    user-select: none;
-  }
-
-  #logoutBtn {
-    background-color: transparent;
-    border: none;
-    color: #b9bbbe;
-    cursor: pointer;
-    font-size: 14px;
-    padding: 5px 10px;
-    border-radius: 4px;
-  }
-  #logoutBtn:hover {
-    background-color: #40444b;
-    color: white;
-  }
-
-  #messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 15px;
-    display: flex;
-    flex-direction: column-reverse;
-  }
-
-  .message {
-    background-color: #40444b;
-    padding: 12px 15px;
-    border-radius: 8px;
-    margin: 8px 0;
-    display: flex;
-    justify-content: flex-start;
-    align-items: center;
-    position: relative; /* for delete button positioning */
-  }
-
-  .messageText {
-    word-break: break-word;
-    max-width: 85%;
-    color: #dcddde;
-  }
-
-  .messageUser {
-    font-weight: 700;
-    color: #7289da;
-    margin-right: 8px;
-  }
-
-  .adminTag {
-    background-color: #faa61a;
-    color: black;
-    font-weight: 700;
-    font-size: 10px;
-    padding: 2px 5px;
-    border-radius: 3px;
-    margin-left: 5px;
-    user-select: none;
-  }
-
-  .systemMessage {
-    background-color: transparent !important;
-    color: #b9bbbe !important;
-    font-style: italic;
-    text-align: center;
-    margin: 8px 0;
-    user-select: none;
-  }
-
-  .deleteBtn {
-    background-color: #f04747;
-    border: none;
-    color: white;
-    border-radius: 3px;
-    padding: 2px 6px;
-    cursor: pointer;
-    font-weight: 700;
-    font-size: 10px;
-    line-height: 1;
-    min-width: 40px;
-    height: 22px;
-    display: none;
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 10;
-  }
-
-  .deleteBtn.show {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  #inputArea {
-    display: flex;
-    padding: 15px;
-    background-color: #202225;
-    border-top: 1px solid #292b2f;
-  }
-
-  #messageInput {
-    flex: 1;
-    background-color: #40444b;
-    border: none;
-    border-radius: 4px;
-    padding: 10px;
-    color: white;
-    font-size: 16px;
-  }
-  #messageInput:focus {
-    outline: none;
-    background-color: #4f545c;
-  }
-
-  #sendBtn {
-    margin-left: 10px;
-    background-color: #5865f2;
-    border: none;
-    color: white;
-    font-weight: 700;
-    padding: 10px 18px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-  }
-  #sendBtn:hover {
-    background-color: #4752c4;
-  }
-
-  /* Admin password modal */
-  #adminModal {
-    display: none;
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    width: 320px;
-    padding: 30px;
-    background-color: #2f3136;
-    border-radius: 8px;
-    transform: translate(-50%, -50%);
-    box-shadow: 0 2px 10px rgba(0,0,0,0.7);
-    z-index: 1000;
-  }
-
-  #adminModal input {
-    width: 100%;
-    padding: 12px;
-    border-radius: 4px;
-    border: none;
-    background-color: #202225;
-    color: white;
-    font-size: 16px;
-  }
-
-  #adminModal button {
-    margin-top: 15px;
-    width: 100%;
-    background-color: #5865f2;
-    border: none;
-    border-radius: 5px;
-    padding: 12px;
-    color: white;
-    font-weight: 700;
-    font-size: 16px;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-  }
-  #adminModal button:hover {
-    background-color: #4752c4;
-  }
-
-  #overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background-color: rgba(0,0,0,0.5);
-    z-index: 999;
-  }
-
-  /* Auth Panel Styles */
-  #authPanel {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    background-color: #2f3136;
-    width: 100vw;
-  }
-
-  #authPanel > div {
-    background-color: #202225;
-    padding: 40px;
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.7);
-    width: 320px;
-    display: flex;
-    flex-direction: column;
-  }
-
-  #authTitle {
-    color: #dcddde;
-    margin-bottom: 20px;
-    text-align: center;
-    font-weight: 700;
-  }
-
-  #authPanel label {
-    color: #b9bbbe;
-    font-weight: 600;
-    margin-bottom: 5px;
-    user-select: none;
-  }
-
-  #authPanel input {
-    background-color: #40444b;
-    border: none;
-    border-radius: 4px;
-    padding: 10px;
-    margin-bottom: 15px;
-    color: #dcddde;
-    font-size: 16px;
-  }
-
-  #authPanel input:focus {
-    outline: none;
-    background-color: #4f545c;
-  }
-
-  #authBtn {
-    background-color: #5865f2;
-    border: none;
-    border-radius: 5px;
-    padding: 12px;
-    color: white;
-    font-weight: 700;
-    font-size: 16px;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-  }
-
-  #authBtn:hover {
-    background-color: #4752c4;
-  }
-
-  #switchLink {
-    margin-top: 15px;
-    color: #b9bbbe;
-    text-align: center;
-    cursor: pointer;
-    user-select: none;
-    font-size: 14px;
-  }
-
-  #authError {
-    color: #f04747;
-    margin-top: 15px;
-    text-align: center;
-    min-height: 18px;
-    font-weight: 600;
-  }
-
-</style>
-</head>
-<body>
-
-<div id="container">
-
-  <!-- User List -->
-  <div id="userListPanel">
-    <h3>Users Online</h3>
-    <div id="userList"></div>
-  </div>
-
-  <!-- Login / Sign Up -->
-  <div id="authPanel" class="panel">
-    <div>
-      <h2 id="authTitle">Login</h2>
-
-      <label for="username">Username</label>
-      <input id="username" type="text" autocomplete="off" />
-
-      <label for="password">Password</label>
-      <input id="password" type="password" autocomplete="off" />
-
-      <button id="authBtn">Login</button>
-
-      <div id="switchLink">Don't have an account? Sign Up</div>
-
-      <div id="authError"></div>
-    </div>
-  </div>
-
-  <!-- Chat UI -->
-  <div id="chatUI" style="flex-direction: column; height: 100vh;">
-    <div id="header">
-      <div id="usernameDisplay"></div>
-      <button id="logoutBtn">Logout</button>
-    </div>
-
-    <div id="messages"></div>
-
-    <div id="inputArea">
-      <input id="messageInput" placeholder="Message #" autocomplete="off" />
-      <button id="sendBtn">Send</button>
-    </div>
-
-    <div id="adminPanel" style="display:none; padding: 10px; background: #232428; border-top: 1px solid #444; text-align:center;">
-      <strong>Admin Controls:</strong> (You are Gxvn)<br />
-      <small>You can delete any message by right-clicking it.</small>
-    </div>
-  </div>
-
-</div>
-
-<!-- Admin password modal -->
-<div id="overlay"></div>
-<div id="adminModal">
-  <input id="adminPasswordInput" type="password" placeholder="Enter admin password" />
-  <button id="adminPassBtn">Enter</button>
-  <div id="adminError" style="color:#f04747; margin-top:10px; text-align:center;"></div>
-</div>
-
-<script>
-  (() => {
-    const OWNER_USERNAME = "Gxvn";
-    const ADMIN_PASS = "letmein123";
-
-    // Elements
-    const authPanel = document.getElementById("authPanel");
-    const chatUI = document.getElementById("chatUI");
-    const userListPanel = document.getElementById("userListPanel");
-    const authTitle = document.getElementById("authTitle");
-    const authBtn = document.getElementById("authBtn");
-    const switchLink = document.getElementById("switchLink");
-    const authError = document.getElementById("authError");
-    const usernameInput = document.getElementById("username");
-    const passwordInput = document.getElementById("password");
-
-    const usernameDisplay = document.getElementById("usernameDisplay");
-    const logoutBtn = document.getElementById("logoutBtn");
+    const loginScreen = document.getElementById("loginScreen");
+    const chatApp = document.getElementById("chatApp");
     const messagesDiv = document.getElementById("messages");
     const messageInput = document.getElementById("messageInput");
-    const sendBtn = document.getElementById("sendBtn");
+    const usernameDisplay = document.getElementById("usernameDisplay");
+    const userList = document.createElement("div");
+    userList.id = "userList";
+    document.body.prepend(userList);
 
-    const adminPanel = document.getElementById("adminPanel");
-    const overlay = document.getElementById("overlay");
-    const adminModal = document.getElementById("adminModal");
-    const adminPasswordInput = document.getElementById("adminPasswordInput");
-    const adminPassBtn = document.getElementById("adminPassBtn");
-    const adminError = document.getElementById("adminError");
+    let currentUser = null;
 
-    const userListDiv = document.getElementById("userList");
-
-    // App state
-    let accounts = JSON.parse(localStorage.getItem("accounts")) || [];
-    let session = JSON.parse(localStorage.getItem("session")) || null;
-    let isAdmin = false;
-
-    // Users online state (array of usernames)
-    let onlineUsers = JSON.parse(localStorage.getItem("onlineUsers")) || [];
-
-    // UI State: Login / SignUp toggle
-    let isLogin = true;
-
-    function saveAccounts() {
-      localStorage.setItem("accounts", JSON.stringify(accounts));
+    function renderMessage(data) {
+      const msg = document.createElement("div");
+      msg.className = "message";
+      const span = document.createElement("span");
+      span.textContent = `${data.username}: ${data.text}`;
+      msg.appendChild(span);
+      messagesDiv.insertBefore(msg, messagesDiv.firstChild);
     }
 
-    function saveSession() {
-      localStorage.setItem("session", JSON.stringify(session));
-    }
-
-    function clearSession() {
-      session = null;
-      isAdmin = false;
-      saveSession();
-    }
-
-    // Save online users to localStorage
-    function saveOnlineUsers() {
-      localStorage.setItem("onlineUsers", JSON.stringify(onlineUsers));
-    }
-
-    // Add user to online list (if not present)
-    function addOnlineUser(username) {
-      if (!onlineUsers.includes(username)) {
-        onlineUsers.push(username);
-        saveOnlineUsers();
-        broadcastSystemMessage(`${username} has entered the chat.`);
-        updateUserListUI();
+    function updateUserList(users) {
+      userList.innerHTML = '<h3>Online Users</h3>';
+      for (let uid in users) {
+        const div = document.createElement("div");
+        div.textContent = users[uid].username;
+        userList.appendChild(div);
       }
     }
 
-    // Remove user from online list
-    function removeOnlineUser(username) {
-      const index = onlineUsers.indexOf(username);
-      if (index !== -1) {
-        onlineUsers.splice(index, 1);
-        saveOnlineUsers();
-        broadcastSystemMessage(`${username} has left the chat.`);
-        updateUserListUI();
-      }
-    }
-
-    // Update the user list UI panel
-    function updateUserListUI() {
-      userListDiv.innerHTML = "";
-      onlineUsers.forEach(user => {
-        const userDiv = document.createElement("div");
-        userDiv.className = "userItem";
-        if (user === session.username) userDiv.classList.add("self");
-        if (user === OWNER_USERNAME) userDiv.classList.add("admin");
-        userDiv.textContent = user;
-        userListDiv.appendChild(userDiv);
-      });
-    }
-
-    // Broadcast system message to all tabs by saving it to chatMessages and storage
-    function broadcastSystemMessage(text) {
-      const msg = {
-        id: generateId(),
-        username: "",
-        text,
-        isAdmin: false,
-        isSystem: true
-      };
-      chatMessages.push(msg);
-      saveMessages();
-      // Trigger storage event to notify other tabs
-      localStorage.setItem("chatMessagesBroadcast", JSON.stringify({ id: msg.id, timestamp: Date.now() }));
-      addMessageElement(msg, false);
-    }
-
-    // Toggle login/signup UI
-    function toggleAuthMode() {
-      isLogin = !isLogin;
-      authTitle.textContent = isLogin ? "Login" : "Sign Up";
-      authBtn.textContent = isLogin ? "Login" : "Sign Up";
-      switchLink.textContent = isLogin ? "Don't have an account? Sign Up" : "Already have an account? Login";
-      authError.textContent = "";
-      usernameInput.value = "";
-      passwordInput.value = "";
-    }
-
-    switchLink.onclick = toggleAuthMode;
-
-    // Authenticate user
-    authBtn.onclick = () => {
-      const username = usernameInput.value.trim();
-      const password = passwordInput.value;
-
-      if (!username || !password) {
-        authError.textContent = "Please fill in both fields.";
-        return;
-      }
-
-      if (isLogin) {
-        // Login mode
-        const user = accounts.find(acc => acc.username === username && acc.password === password);
-        if (!user) {
-          authError.textContent = "Invalid username or password.";
-          return;
-        }
-        session = { username, password };
-        saveSession();
-        enterChat();
-      } else {
-        // Sign up mode
-        // No uniqueness check on username allowed
-        accounts.push({ username, password });
-        saveAccounts();
-        session = { username, password };
-        saveSession();
-        enterChat();
+    document.getElementById("sendButton").onclick = () => {
+      const text = messageInput.value.trim();
+      if (text && currentUser) {
+        push(ref(db, "messages"), {
+          username: currentUser.displayName,
+          text,
+          timestamp: serverTimestamp()
+        });
+        messageInput.value = "";
       }
     };
 
-    // Enter chat UI after login/signup
-    function enterChat() {
-      authPanel.style.display = "none";
-      userListPanel.style.display = "flex";
-      chatUI.style.display = "flex";
-      usernameDisplay.textContent = `Logged in as: ${session.username}`;
-      addOnlineUser(session.username);
-      loadMessages();
-      updateUserListUI();
-      checkAdmin();
-    }
-
-    // Logout
-    logoutBtn.onclick = () => {
-      removeOnlineUser(session.username);
-      clearSession();
-      location.reload();
-    };
-
-    // Chat storage
-    let chatMessages = JSON.parse(localStorage.getItem("chatMessages")) || [];
-
-    // Utility: generate unique ID for each message
-    function generateId() {
-      return Date.now().toString() + Math.random().toString(36).substr(2, 5);
-    }
-
-    function saveMessages() {
-      localStorage.setItem("chatMessages", JSON.stringify(chatMessages));
-    }
-
-    function loadMessages() {
-      messagesDiv.innerHTML = "";
-      for(let i = chatMessages.length -1; i >= 0; i--) {
-        addMessageElement(chatMessages[i], false);
-      }
-    }
-
-    // Add message element to chat window
-    function addMessageElement({ id, username: u, text, isAdmin: adminFlag, isSystem = false }, save = true) {
-      const msgDiv = document.createElement("div");
-      msgDiv.className = isSystem ? "systemMessage" : "message";
-
-      if (!isSystem) {
-        const userSpan = document.createElement("span");
-        userSpan.className = "messageUser";
-        userSpan.textContent = u;
-        msgDiv.appendChild(userSpan);
-
-        if (adminFlag) {
-          const adminTag = document.createElement("span");
-          adminTag.className = "adminTag";
-          adminTag.textContent = "ADMIN";
-          msgDiv.appendChild(adminTag);
-        }
-
-        const textSpan = document.createElement("span");
-        textSpan.className = "messageText";
-        textSpan.textContent = text;
-        msgDiv.appendChild(textSpan);
-
-        // Show delete button on right click for admins only
-        msgDiv.oncontextmenu = e => {
-          e.preventDefault();
-          if (session.username === OWNER_USERNAME) {
-            // Show a delete button if none exists
-            if (!msgDiv.querySelector(".deleteBtn")) {
-              const delBtn = document.createElement("button");
-              delBtn.className = "deleteBtn show";
-              delBtn.textContent = "Delete";
-              delBtn.onclick = () => {
-                chatMessages = chatMessages.filter(m => m.id !== id);
-                saveMessages();
-                msgDiv.remove();
-              };
-              msgDiv.appendChild(delBtn);
-            }
-          }
-        };
-      } else {
-        msgDiv.textContent = text;
-      }
-
-      messagesDiv.insertBefore(msgDiv, messagesDiv.firstChild);
-
-      if (save && !isSystem) {
-        chatMessages.push({ id: generateId(), username: u, text, isAdmin: adminFlag });
-        saveMessages();
-      }
-    }
-
-    // Send message handler
-    sendBtn.onclick = () => {
-      const msg = messageInput.value.trim();
-      if (!msg) return;
-      addMessageElement({ username: session.username, text: msg, isAdmin: isAdmin }, true);
-      messageInput.value = "";
-    };
-
-    messageInput.addEventListener("keydown", e => {
-      if (e.key === "Enter") sendBtn.click();
+    onChildAdded(ref(db, "messages"), (snapshot) => {
+      renderMessage(snapshot.val());
     });
 
-    // Prevent 'p' key opening admin modal while typing in messageInput
-    document.addEventListener("keydown", e => {
-      if ((e.key === "p" || e.key === "P") && document.activeElement !== messageInput) {
-        e.preventDefault();
-        showAdminModal();
+    const usersRef = ref(db, "onlineUsers");
+
+    function handleUserPresence(user) {
+      const userRef = ref(db, `onlineUsers/${user.uid}`);
+      set(userRef, { username: user.displayName });
+      onDisconnect(userRef).remove();
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        currentUser = user;
+        loginScreen.style.display = "none";
+        chatApp.style.display = "flex";
+        usernameDisplay.innerText = `Logged in as: ${user.displayName}`;
+        handleUserPresence(user);
       }
     });
 
-    function showAdminModal() {
-      if (session.username !== OWNER_USERNAME) return; // only owner can get admin panel
-      adminModal.style.display = "block";
-      overlay.style.display = "block";
-      adminPasswordInput.value = "";
-      adminError.textContent = "";
-      adminPasswordInput.focus();
+    onChildAdded(usersRef, (snap) => updateUserList(snap.ref.parent._data));
+
+    document.getElementById("loginBtn").onclick = () => signInWithPopup(auth, provider);
+    document.getElementById("logoutBtn").onclick = () => signOut(auth);
+  </script>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #2b2d31;
+      color: white;
+      display: flex;
+      height: 100vh;
     }
-
-    // Admin modal close
-    overlay.onclick = () => {
-      adminModal.style.display = "none";
-      overlay.style.display = "none";
-    };
-
-    // Admin password check
-    adminPassBtn.onclick = () => {
-      if (adminPasswordInput.value === ADMIN_PASS) {
-        isAdmin = true;
-        adminModal.style.display = "none";
-        overlay.style.display = "none";
-        adminPanel.style.display = "block";
-        alert("Admin mode activated!");
-        checkAdmin();
-      } else {
-        adminError.textContent = "Incorrect password!";
-      }
-    };
-
-    // Show admin panel for owner after login + admin pass
-    function checkAdmin() {
-      if (session.username === OWNER_USERNAME) {
-        adminPanel.style.display = isAdmin ? "block" : "none";
-      }
+    #loginScreen {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
     }
-
-    // Sync online users & chat messages across tabs
-    window.addEventListener("storage", e => {
-      if (e.key === "onlineUsers") {
-        onlineUsers = JSON.parse(e.newValue) || [];
-        updateUserListUI();
-      }
-      if (e.key === "chatMessages") {
-        chatMessages = JSON.parse(e.newValue) || [];
-        loadMessages();
-      }
-      if (e.key === "chatMessagesBroadcast") {
-        chatMessages = JSON.parse(localStorage.getItem("chatMessages")) || [];
-        loadMessages();
-      }
-    });
-
-    // On tab unload, remove user from online list
-    window.addEventListener("beforeunload", () => {
-      if (session && session.username) {
-        removeOnlineUser(session.username);
-      }
-    });
-
-    // On page load, check if session exists and auto-login
-    if (session) {
-      const foundUser = accounts.find(acc => acc.username === session.username && acc.password === session.password);
-      if (foundUser) {
-        enterChat();
-      } else {
-        clearSession();
-      }
+    #chatApp {
+      display: none;
+      flex: 1;
+      flex-direction: column;
     }
-  })();
-</script>
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+    .message {
+      background-color: #40444b;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 8px;
+    }
+    #inputContainer {
+      display: flex;
+      padding: 10px;
+      background-color: #1e1f22;
+    }
+    #messageInput {
+      flex: 1;
+      padding: 10px;
+      border-radius: 5px;
+      border: none;
+    }
+    #sendButton {
+      padding: 10px;
+      margin-left: 10px;
+      background-color: #5865f2;
+      border: none;
+      border-radius: 5px;
+      color: white;
+      cursor: pointer;
+    }
+    #usernameDisplay {
+      padding: 10px;
+      background-color: #1e1f22;
+      border-bottom: 1px solid #444;
+    }
+    #userList {
+      width: 200px;
+      background-color: #1e1f22;
+      padding: 10px;
+      border-right: 1px solid #444;
+    }
+  </style>
+</head>
+<body>
+  <div id="loginScreen">
+    <h2>Welcome to MaskedMessages</h2>
+    <button id="loginBtn">Login with Google</button>
+  </div>
 
+  <div id="chatApp">
+    <div id="usernameDisplay"></div>
+    <div id="messages"></div>
+    <div id="inputContainer">
+      <input type="text" id="messageInput" placeholder="Type a message..." />
+      <button id="sendButton">Send</button>
+      <button id="logoutBtn">Logout</button>
+    </div>
+  </div>
 </body>
 </html>
